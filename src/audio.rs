@@ -10,7 +10,7 @@ use cpal::{Device, SampleFormat, SizedSample, Stream, StreamConfig};
 
 #[cfg(target_os = "macos")]
 const AUTOMATIC_INPUT_DEVICE_PREFERENCES: &[&str] = crate::config::INPUT_DEVICES;
-#[cfg(target_os = "linux")]
+#[cfg(not(target_os = "macos"))]
 const AUTOMATIC_INPUT_DEVICE_PREFERENCES: &[&str] = &[];
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -267,7 +267,7 @@ impl AudioInput {
         Self::open_device(device)
     }
 
-    #[cfg(target_os = "linux")]
+    #[cfg(not(target_os = "macos"))]
     pub fn open_matching(query: &str) -> Result<Self> {
         let host = cpal::default_host();
         let device = host
@@ -723,7 +723,7 @@ fn avoid_bluetooth_input(default: Device, devices: &[Device]) -> Device {
     devices[index].clone()
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(not(target_os = "macos"))]
 fn avoid_bluetooth_input(default: Device, _devices: &[Device]) -> Device {
     default
 }

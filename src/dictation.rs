@@ -395,7 +395,7 @@ impl DictationClip {
         silent
     }
 
-    #[cfg(any(test, target_os = "linux"))]
+    #[cfg(any(test, not(target_os = "macos")))]
     pub fn into_parakeet_samples(self) -> Vec<f32> {
         let mut samples = self.samples;
         pad_for_parakeet(&mut samples);
@@ -764,7 +764,7 @@ impl DictationCapture {
         self.recording.is_some()
     }
 
-    #[cfg(any(test, target_os = "linux"))]
+    #[cfg(any(test, not(target_os = "macos")))]
     pub fn start(&mut self, now: CaptureInstant) {
         self.start_with_pre_roll(now, PRE_ROLL_DURATION, false);
     }
@@ -841,7 +841,7 @@ impl DictationCapture {
         became_intentional
     }
 
-    #[cfg(any(test, target_os = "linux"))]
+    #[cfg(any(test, not(target_os = "macos")))]
     pub fn ingest(&mut self, samples: &[f32], captured_through: CaptureInstant) {
         self.ingest_with_pending(samples, captured_through, None)
     }
@@ -915,7 +915,7 @@ impl DictationCapture {
         }
     }
 
-    #[cfg(any(test, target_os = "linux"))]
+    #[cfg(any(test, not(target_os = "macos")))]
     pub fn finish(&mut self, now: CaptureInstant) -> Finish {
         self.finish_with_tail(now, Duration::ZERO)
     }

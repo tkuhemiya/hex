@@ -752,6 +752,27 @@ an open response body, so completion does not depend on EOF or subsequent data.
 These checks do not establish live service or
 microphone behavior.
 
+```ts
+Windows preview (fork)                   // not Linux or macOS parity
+├── hex dictate (default) -> Foreground console process -> Alt-Space capture -> Transcribe -> Paste
+├── Shortcut -> WH_KEYBOARD_LL hook; exact modifiers; trigger swallowed while owned
+│   ├── Alt/Win held -> Unassigned mask key keeps menus and Start closed
+│   └── Escape -> Swallowed and cancels only while capturing or locked
+├── Paste -> Clipboard + SendInput Ctrl-V after modifiers are released
+│   └── Elevated target -> UIPI may drop the keystroke; transcript stays on the clipboard
+├── Settings -> windows-settings.json in %APPDATA%\voice-control; hex settings prints it
+└── Microphone failure -> Listener exits, as on Linux
+```
+
+No Windows Settings window, tray, HUD, autostart, updater, Commands, Voice Action,
+Modes processing, History, or meetings. The gesture and settings unit tests in
+[windows_gesture.rs](../../src/windows_gesture.rs) and
+[windows_settings.rs](../../src/windows_settings.rs) also run in Linux CI;
+[Windows CI](../../.github/workflows/check-windows.yml) builds, tests, and
+transcribes a known WAV with the default model. No physical hotkey, microphone,
+or paste run on Windows has been recorded. See the [Windows guide](../windows.md)
+and [plan](../plans/windows.md).
+
 ## Developer And Prototype Surfaces
 
 ```ts
