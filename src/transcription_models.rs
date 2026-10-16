@@ -1,5 +1,5 @@
-use std::fs::{self, File};
-use std::io::{ErrorKind, Read};
+use std::fs::{self, File, OpenOptions};
+use std::io::{self, ErrorKind, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::str::FromStr;
@@ -661,10 +661,10 @@ fn remove_installed_at(path: &Path) -> Result<()> {
     if !directory.is_dir() {
         return Ok(());
     }
-    let lock = File::create(directory.join(".download.lock"))?;
+    let lock = open_download_lock(directory)?;
     match lock.try_lock_exclusive() {
         Ok(()) => {}
-        Err(error) if error.kind() == ErrorKind::WouldBlock => {
+        Err(error) if is_lock_contended(&error) => {
             bail!("A model download is in progress. Try again when it finishes.")
         }
         Err(error) => return Err(error.into()),
@@ -682,22 +682,53 @@ fn remove_installed_at(path: &Path) -> Result<()> {
             }
         }
     }
-    File::open(directory)?.sync_all()?;
+    sync_directory(directory)?;
     Ok(())
 }
 
 fn lock_downloads(directory: &Path, canceled: &AtomicBool) -> Result<File> {
-    let lock = File::create(directory.join(".download.lock"))?;
+    let lock = open_download_lock(directory)?;
     loop {
         check_canceled(canceled)?;
         match lock.try_lock_exclusive() {
             Ok(()) => return Ok(lock),
-            Err(error) if error.kind() == ErrorKind::WouldBlock => {
+            Err(error) if is_lock_contended(&error) => {
                 thread::sleep(Duration::from_millis(100));
             }
             Err(error) => return Err(error.into()),
         }
     }
+}
+
+/// Opens the shared download lock without truncating it: Windows refuses to
+/// truncate a file while another handle holds a byte-range lock on it.
+fn open_download_lock(directory: &Path) -> io::Result<File> {
+    OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(directory.join(".download.lock"))
+}
+
+/// Windows reports a held lock as `ERROR_LOCK_VIOLATION`, not `WouldBlock`.
+fn is_lock_contended(error: &io::Error) -> bool {
+    error.kind() == ErrorKind::WouldBlock
+        || error.raw_os_error() == fs2::lock_contended_error().raw_os_error()
+}
+
+/// Flushes a file's contents. Windows requires a writable handle for this.
+pub(crate) fn sync_file(path: &Path) -> io::Result<()> {
+    OpenOptions::new().write(true).open(path)?.sync_all()
+}
+
+/// Makes a rename or deletion in `directory` durable. Windows cannot open a
+/// directory as a file, and NTFS journals renames itself, so this is Unix-only.
+pub(crate) fn sync_directory(directory: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    File::open(directory)?.sync_all()?;
+    #[cfg(not(unix))]
+    let _ = directory;
+    Ok(())
 }
 
 fn verification_receipt_matches(path: &Path, model: &ModelDefinition) -> bool {
@@ -873,9 +904,9 @@ fn verify_and_promote_partial(
 ) -> Result<()> {
     ModelPreparationStage::Verifying.store(stage);
     verify_file_with_cancel(partial, model, canceled)?;
-    File::open(partial)?.sync_all()?;
+    sync_file(partial)?;
     fs::rename(partial, destination)?;
-    File::open(directory)?.sync_all()?;
+    sync_directory(directory)?;
     write_verification_receipt(destination, model)?;
     if let Some(bytes) = model.download_bytes() {
         downloaded_bytes.store(bytes, Ordering::Relaxed);
@@ -906,9 +937,9 @@ pub(crate) fn write_json_atomically(path: &Path, value: &impl Serialize) -> Resu
         .ok_or_else(|| color_eyre::eyre::eyre!("{} has no parent", path.display()))?;
     let temporary = path.with_extension("json.tmp");
     fs::write(&temporary, serde_json::to_vec(value)?)?;
-    File::open(&temporary)?.sync_all()?;
+    sync_file(&temporary)?;
     fs::rename(temporary, path)?;
-    File::open(parent)?.sync_all()?;
+    sync_directory(parent)?;
     Ok(())
 }
 

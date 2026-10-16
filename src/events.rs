@@ -171,7 +171,7 @@ pub struct EventReader {
     discarding_record: bool,
     events: VecDeque<VoiceEvent>,
     current_context: Option<(Option<String>, Option<String>)>,
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     file_id: Option<(u64, u64)>,
 }
 
@@ -344,7 +344,7 @@ impl EventReader {
             discarding_record: false,
             events: VecDeque::new(),
             current_context: None,
-            #[cfg(unix)]
+            #[cfg(any(unix, windows))]
             file_id: None,
         }
     }
@@ -362,9 +362,9 @@ impl EventReader {
         if metadata.len() < self.offset {
             self.reset();
         }
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
-            let file_id = (metadata.dev(), metadata.ino());
+            let file_id = file_id(&file, &metadata)?;
             if self.file_id.is_some_and(|current| current != file_id) {
                 self.reset();
             }
@@ -457,11 +457,33 @@ impl EventReader {
         self.discarding_record = false;
         self.events.clear();
         self.current_context = None;
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             self.file_id = None;
         }
     }
+}
+
+#[cfg(unix)]
+fn file_id(_file: &File, metadata: &fs::Metadata) -> io::Result<(u64, u64)> {
+    Ok((metadata.dev(), metadata.ino()))
+}
+
+/// The NTFS volume serial and file index, the Windows analogue of `(dev, ino)`.
+#[cfg(windows)]
+fn file_id(file: &File, _metadata: &fs::Metadata) -> io::Result<(u64, u64)> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::{
+        BY_HANDLE_FILE_INFORMATION, GetFileInformationByHandle,
+    };
+
+    let mut info: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
+    // SAFETY: the handle is owned by `file` for this call and `info` is writable.
+    if unsafe { GetFileInformationByHandle(file.as_raw_handle(), &mut info) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let index = (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow);
+    Ok((u64::from(info.dwVolumeSerialNumber), index))
 }
 
 pub fn now_ms() -> u64 {

@@ -541,7 +541,9 @@ mod tests {
         let mut store = HistoryStore::open(path.clone(), HistoryRetention::Day, 0);
         store.record(draft("old"), 1_000).unwrap();
         store.record(draft("fresh"), 2_000).unwrap();
-        fs::File::open(&path)
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&path)
             .unwrap()
             .set_modified(UNIX_EPOCH)
             .unwrap();
@@ -582,7 +584,9 @@ mod tests {
             // The clock is sampled under the lock; acquiring it waits for that prune.
             drop(history.locked());
         };
-        fs::File::open(&path)
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&path)
             .unwrap()
             .set_modified(UNIX_EPOCH)
             .unwrap();
@@ -598,7 +602,9 @@ mod tests {
         tick(day_ms + 2_001);
         let saved: LoadedHistory = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
         assert!(saved.entries.is_empty());
-        fs::File::open(&path)
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&path)
             .unwrap()
             .set_modified(UNIX_EPOCH)
             .unwrap();
@@ -682,7 +688,9 @@ mod tests {
         let mut store = HistoryStore::open(path.clone(), HistoryRetention::Week, 1_000);
         store.record(draft("kept"), 1_000).unwrap();
         store.set_retention(HistoryRetention::Off, 1_500).unwrap();
-        fs::File::open(&path)
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&path)
             .unwrap()
             .set_modified(UNIX_EPOCH)
             .unwrap();
