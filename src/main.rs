@@ -11,7 +11,7 @@ mod apple_intelligence;
 mod apple_speech;
 #[cfg(target_os = "macos")]
 mod application_catalog;
-#[cfg_attr(target_os = "linux", allow(dead_code))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod audio;
 #[cfg(target_os = "macos")]
 mod command_grammar;
@@ -30,11 +30,11 @@ mod desktop_host;
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 mod desktop_transcription_picker;
 #[cfg(any(target_os = "macos", target_os = "linux"))]
-#[cfg_attr(target_os = "linux", allow(dead_code))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod desktop_ui;
 #[cfg(target_os = "macos")]
 mod developer_control;
-#[cfg_attr(target_os = "linux", allow(dead_code))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod dictation;
 #[cfg(target_os = "macos")]
 mod dictation_audio;
@@ -44,14 +44,14 @@ mod dictation_diagnostics;
 mod dictation_indicator;
 #[cfg(target_os = "macos")]
 mod dictation_processor;
-#[cfg_attr(target_os = "linux", allow(dead_code))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod events;
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 mod feedback;
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 mod gguf_session;
 #[cfg(any(target_os = "macos", test))]
-#[cfg_attr(target_os = "linux", allow(dead_code))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod history;
 mod instance;
 #[cfg(target_os = "macos")]
@@ -74,7 +74,8 @@ mod linux_service;
 mod linux_session;
 #[cfg(target_os = "linux")]
 mod linux_settings;
-#[cfg(target_os = "linux")]
+// The offline transcribe.cpp adapter has no Linux-specific code; Windows reuses it.
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 mod linux_transcriber;
 #[cfg(target_os = "linux")]
 mod linux_updater;
@@ -94,7 +95,7 @@ mod meeting_mcp;
 mod meeting_watcher;
 #[cfg(target_os = "macos")]
 mod microphone_activity;
-#[cfg_attr(target_os = "linux", allow(dead_code))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod moonshine;
 #[cfg(all(target_os = "macos", debug_assertions))]
 mod moonshine_lab;
@@ -104,7 +105,7 @@ mod onboarding;
 mod parakeet;
 #[cfg(target_os = "macos")]
 mod paste;
-#[cfg_attr(target_os = "linux", allow(dead_code))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod pause_segmenter;
 #[cfg(target_os = "macos")]
 mod permission_guide;
@@ -116,7 +117,7 @@ mod recognition;
 mod recording_environment;
 #[cfg(target_os = "macos")]
 mod sparkle;
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 mod spoken_text;
 #[cfg(target_os = "macos")]
 mod status_item;
@@ -130,12 +131,25 @@ mod text_replacements;
 mod transcription;
 #[cfg(target_os = "macos")]
 mod transcription_benchmark;
-#[cfg_attr(target_os = "linux", allow(dead_code))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod transcription_models;
 #[cfg(target_os = "macos")]
 mod transcription_preparation;
 #[cfg(target_os = "macos")]
 mod transcription_service;
+#[cfg(target_os = "windows")]
+mod windows;
+#[cfg(target_os = "windows")]
+mod windows_dictation;
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+mod windows_gesture;
+#[cfg(target_os = "windows")]
+mod windows_input;
+#[cfg(target_os = "windows")]
+mod windows_paste;
+#[cfg(target_os = "windows")]
+mod windows_settings;
 
 #[cfg(target_os = "macos")]
 use std::fs;
@@ -989,4 +1003,9 @@ mod tests {
 #[cfg(target_os = "linux")]
 fn main() -> Result<()> {
     linux::run(&SHUTDOWN)
+}
+
+#[cfg(target_os = "windows")]
+fn main() -> Result<()> {
+    windows::run(&SHUTDOWN)
 }

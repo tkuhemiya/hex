@@ -1,0 +1,71 @@
+name: Check Windows
+
+on:
+  pull_request:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "build.rs"
+      - "src/**"
+      - "assets/**"
+      - "resources/**"
+      - ".github/workflows/check-windows.yml"
+  push:
+    branches: [main]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "build.rs"
+      - "src/**"
+      - "assets/**"
+      - "resources/**"
+      - ".github/workflows/check-windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: windows-2025
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_PROFILE_DEV_DEBUG: "0"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - run: cargo build --locked --bin voice-control
+      - run: cargo test --locked --bin voice-control
+      - run: cargo clippy --locked --bin voice-control --tests -- -D warnings
+      - uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/hex-model-test/models
+          key: windows-dictation-model-${{ hashFiles('src/transcription_models.rs') }}
+      - name: Install the model and transcribe a known recording
+        env:
+          HEX_APPLICATION_SUPPORT_DIR: ${{ runner.temp }}/hex-model-test
+        run: |
+          hex=target/debug/voice-control.exe
+          "$hex" model install
+          "$hex" model check
+          curl --fail --location --silent --show-error --max-time 60 \
+            https://raw.githubusercontent.com/ggml-org/whisper.cpp/b0a11594aec50892a02cd8d129eee2dfe93a8bb8/samples/jfk.wav \
+            --output "$RUNNER_TEMP/jfk.wav"
+          printf '%s  %s\n' \
+            59dfb9a4acb36fe2a2affc14bacbee2920ff435cb13cc314a08c13f66ba7860e \
+            "$RUNNER_TEMP/jfk.wav" | sha256sum --check
+          transcript=$("$hex" model transcribe "$RUNNER_TEMP/jfk.wav")
+          echo "$transcript"
+          echo "$transcript" | grep -qi "ask not what your country can do for you"

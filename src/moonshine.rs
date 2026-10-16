@@ -690,6 +690,8 @@ fn find_library(project_root: &Path) -> Result<PathBuf> {
     const LIBRARY_NAME: &str = "libmoonshine.dylib";
     #[cfg(target_os = "linux")]
     const LIBRARY_NAME: &str = "libmoonshine.so";
+    #[cfg(target_os = "windows")]
+    const LIBRARY_NAME: &str = "moonshine.dll";
 
     #[cfg(target_os = "macos")]
     if let Ok(executable) = std::env::current_exe()

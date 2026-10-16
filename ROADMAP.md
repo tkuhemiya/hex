@@ -83,6 +83,13 @@ product shell without merging their lifecycle or platform behavior. Follow
 both settings formats and delete the duplicate Linux render tree only after the
 shared Settings and Activity slices work on both hosts.
 
+## Validate The Windows Preview (fork)
+
+Run phase 1 of [`docs/plans/windows.md`](docs/plans/windows.md) on a physical
+Windows machine: hotkey suppression and menu masking, double-tap lock, Escape
+cancel, microphone selection, and paste into ordinary and elevated windows.
+Then add the background tray app, microphone recovery, and clipboard restore.
+
 ## Harden The Real-Time Boundary
 
 Append-only observation serialization and flushing now run on a bounded writer
