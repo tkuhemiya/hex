@@ -13,6 +13,7 @@ mod apple_speech;
 mod application_catalog;
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod audio;
+mod cloud_transcription;
 #[cfg(target_os = "macos")]
 mod command_grammar;
 #[cfg(target_os = "macos")]

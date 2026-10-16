@@ -71,6 +71,9 @@ substitute for source inspection or a second roadmap.
 - `apple_speech`: the Swift `SpeechAnalyzer` bridge with per-locale support
   checks, asset reservation, and batch transcription.
 - `transcription`: runtime selection and transactional warm-model activation.
+- `cloud_transcription`: the opt-in hosted speech-to-text client (OpenAI, xAI,
+  Groq): settings with a redacted key, in-memory WAV multipart uploads over
+  HTTPS through `ureq`, and provider error reporting.
 - `gguf_session`: the `transcribe.cpp` session owner shared by `parakeet` and
   `linux_transcriber`; it recreates the native session around each run so
   inference scratch stays bounded.
@@ -317,6 +320,11 @@ CoreAudio formats, AppleScript details, or event serialization.
   return only paste-ready text, and paste at the current focus. Failed, empty,
   cancelled, or timed-out actions paste nothing. Voice Action jobs share normal
   queueing and cancellation but never update the last dictation.
+- Cloud transcription is a persisted opt-in (`cloud_transcription.enabled`,
+  default off). Only dictation targets upload audio; meetings and the local API
+  stay local. A failed upload pastes nothing and never falls back silently to
+  the local model. Keys come from settings or the provider's environment
+  variable and never appear in logs or `Debug` output.
 - Mode processing is best-effort and ordered: corrections, optional OpenCode
   rewriting, then selected transformations. A failed stage preserves its input;
   the transformation chain is one stage, so failure discards its partial results.

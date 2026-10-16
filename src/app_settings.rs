@@ -8,6 +8,7 @@ use objc2::MainThreadMarker;
 use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy};
 use serde::{Deserialize, Serialize};
 
+use crate::cloud_transcription::CloudTranscriptionSettings;
 use crate::transcription_models::{TranscriptionModelId, TranscriptionSelection};
 
 static RECORDING_AUDIO_BEHAVIOR: AtomicU8 = AtomicU8::new(0);
@@ -26,6 +27,7 @@ static SETTINGS_TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 static TRANSCRIPTION_SELECTION: OnceLock<RwLock<RuntimeTranscriptionSelection>> = OnceLock::new();
 static MICROPHONE_SELECTION: OnceLock<RwLock<RuntimeMicrophoneSelection>> = OnceLock::new();
 static VOICE_ACTION_SETTINGS: OnceLock<RwLock<VoiceActionSettings>> = OnceLock::new();
+static CLOUD_TRANSCRIPTION: OnceLock<RwLock<CloudTranscriptionSettings>> = OnceLock::new();
 
 #[derive(Default)]
 struct RuntimeTranscriptionSelection {
@@ -595,6 +597,8 @@ pub struct AppSettings {
     pub voice_action: VoiceActionSettings,
     pub history_retention: crate::history::HistoryRetention,
     pub meetings: MeetingSettings,
+    /// Opt-in hosted dictation transcription; off by default.
+    pub cloud_transcription: CloudTranscriptionSettings,
     #[serde(skip_serializing)]
     pub text_replacements: Vec<TextReplacement>,
 }
@@ -629,6 +633,7 @@ impl Default for AppSettings {
             voice_action: VoiceActionSettings::default(),
             history_retention: crate::history::HistoryRetention::default(),
             meetings: MeetingSettings::default(),
+            cloud_transcription: CloudTranscriptionSettings::default(),
             text_replacements: Vec::new(),
         }
     }
@@ -774,6 +779,7 @@ impl AppSettings {
                 settings.migrate_disabled_transcription_model();
                 settings.normalize_transcription_recents();
                 crate::transcription_models::validate(&settings.transcription)?;
+                settings.cloud_transcription.validate()?;
                 settings.repair_hotkey_conflict();
                 if serde_json::to_value(&settings)? != loaded
                     && let Err(error) = settings.write_to(path)
@@ -857,6 +863,10 @@ impl AppSettings {
             .get_or_init(Default::default)
             .write()
             .unwrap_or_else(|error| error.into_inner()) = self.voice_action.clone();
+        *CLOUD_TRANSCRIPTION
+            .get_or_init(Default::default)
+            .write()
+            .unwrap_or_else(|error| error.into_inner()) = self.cloud_transcription.clone();
     }
 
     /// Mode activations saved while Finder showed filename extensions carry a
@@ -1084,6 +1094,14 @@ pub fn edit_hotkey() -> Option<RuntimeHotkey> {
 
 pub fn voice_action_settings() -> VoiceActionSettings {
     VOICE_ACTION_SETTINGS
+        .get_or_init(Default::default)
+        .read()
+        .unwrap_or_else(|error| error.into_inner())
+        .clone()
+}
+
+pub fn cloud_transcription() -> CloudTranscriptionSettings {
+    CLOUD_TRANSCRIPTION
         .get_or_init(Default::default)
         .read()
         .unwrap_or_else(|error| error.into_inner())

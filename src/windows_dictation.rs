@@ -12,7 +12,7 @@ use crate::audio::{AudioInput, AudioInputEvent, CaptureInstant};
 use crate::dictation::{DictationCapture, Finish};
 use crate::events::{DictationPhase, EventLog, TranscriptPhase, VoiceEvent, VoiceState, now_ms};
 use crate::feedback::{self, Tone};
-use crate::linux_transcriber::LinuxTranscriber;
+use crate::linux_transcriber::{DictationTranscriber, LinuxTranscriber};
 use crate::windows_input::{HotkeyEvent, WindowsHotkeyMonitor};
 use crate::windows_paste::WindowsPaster;
 
@@ -37,8 +37,9 @@ impl Drop for OutputWorker {
     }
 }
 
-/// Runs hotkey dictation until `shutdown`. A prepared transcriber skips the
-/// model load; otherwise the supplied transcription selection is loaded here.
+/// Runs hotkey dictation until `shutdown`. Enabled cloud transcription replaces
+/// the local model; otherwise a prepared transcriber skips the model load and
+/// the supplied transcription selection is loaded here.
 pub fn run(
     event_path: &Path,
     device: Option<&str>,
@@ -46,8 +47,11 @@ pub fn run(
     settings: crate::windows_settings::WindowsSettings,
     transcriber: Option<LinuxTranscriber>,
 ) -> Result<()> {
-    let transcriber =
-        transcriber.map_or_else(|| LinuxTranscriber::load(&settings.transcription), Ok)?;
+    let transcriber = DictationTranscriber::load(
+        &settings.transcription,
+        &settings.cloud_transcription,
+        transcriber,
+    )?;
     // Drop audio/hotkeys and close the job queue before joining slow output on
     // every exit, including failures during startup or recording.
     let mut output = OutputWorker {

@@ -51,6 +51,9 @@ enum ModelCommand {
     Check,
     /// Transcribe a WAV file with the installed model.
     Transcribe { wav: PathBuf },
+    /// Transcribe a WAV file with the configured cloud provider. This uploads
+    /// the file even while cloud dictation is disabled.
+    CloudTranscribe { wav: PathBuf },
 }
 
 pub fn run(shutdown: &'static AtomicBool) -> Result<()> {
@@ -110,6 +113,17 @@ pub fn run(shutdown: &'static AtomicBool) -> Result<()> {
             }
             ModelCommand::Transcribe { wav } => {
                 println!("{}", crate::linux_transcriber::transcribe_wav(&wav)?);
+                Ok(())
+            }
+            ModelCommand::CloudTranscribe { wav } => {
+                let settings = WindowsSettings::load()?;
+                println!(
+                    "{}",
+                    crate::linux_transcriber::transcribe_wav_cloud(
+                        &wav,
+                        &settings.cloud_transcription
+                    )?
+                );
                 Ok(())
             }
         },

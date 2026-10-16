@@ -5,6 +5,7 @@ use std::time::Instant;
 use color_eyre::eyre::{Result, WrapErr, eyre};
 use transcribe_cpp::{Backend, Model, ModelOptions, RunOptions, TimestampKind};
 
+use crate::cloud_transcription::{CloudTranscriber, CloudTranscriptionSettings};
 use crate::gguf_session::OfflineGgufSession;
 use crate::transcription_models::{
     ModelDefinition, TranscriptionModelId, TranscriptionSelection, definition,
@@ -16,6 +17,41 @@ pub struct LinuxTranscriber {
     options: RunOptions,
     device_label: String,
     max_audio_samples: Option<usize>,
+}
+
+/// The dictation backend: the local model, or the opt-in hosted provider.
+pub enum DictationTranscriber {
+    Local(LinuxTranscriber),
+    Cloud(CloudTranscriber),
+}
+
+impl DictationTranscriber {
+    /// Cloud transcription, when enabled, replaces the local model entirely, so
+    /// a prepared local transcriber is dropped and no model has to be installed.
+    pub fn load(
+        selection: &TranscriptionSelection,
+        cloud: &CloudTranscriptionSettings,
+        prepared: Option<LinuxTranscriber>,
+    ) -> Result<Self> {
+        if cloud.enabled {
+            let transcriber = CloudTranscriber::new(cloud)?;
+            tracing::info!(
+                provider = transcriber.describe(),
+                "using cloud transcription"
+            );
+            return Ok(Self::Cloud(transcriber));
+        }
+        prepared
+            .map_or_else(|| LinuxTranscriber::load(selection), Ok)
+            .map(Self::Local)
+    }
+
+    pub fn transcribe(&mut self, samples: &[f32]) -> Result<String> {
+        match self {
+            Self::Local(transcriber) => transcriber.transcribe(samples),
+            Self::Cloud(transcriber) => transcriber.transcribe(samples),
+        }
+    }
 }
 
 pub fn default_model() -> &'static ModelDefinition {
@@ -60,6 +96,23 @@ pub fn devices() -> Result<Vec<String>> {
 }
 
 pub fn transcribe_wav(path: &Path) -> Result<String> {
+    let mut samples = read_wav(path)?;
+    crate::dictation::pad_for_parakeet(&mut samples);
+    LinuxTranscriber::load_default()?.transcribe(&samples)
+}
+
+/// Transcribes a WAV file with the configured cloud provider, even while
+/// cloud dictation is disabled, so a key can be checked before enabling it.
+pub fn transcribe_wav_cloud(path: &Path, settings: &CloudTranscriptionSettings) -> Result<String> {
+    let settings = CloudTranscriptionSettings {
+        enabled: true,
+        ..settings.clone()
+    };
+    CloudTranscriber::new(&settings)?.transcribe(&read_wav(path)?)
+}
+
+/// Reads a WAV file as 16 kHz mono samples.
+fn read_wav(path: &Path) -> Result<Vec<f32>> {
     let mut reader = hound::WavReader::open(path)
         .wrap_err_with(|| format!("could not open {}", path.display()))?;
     let spec = reader.spec();
@@ -81,9 +134,10 @@ pub fn transcribe_wav(path: &Path) -> Result<String> {
         .chunks(channels)
         .map(|frame| frame.iter().sum::<f32>() / channels as f32)
         .collect::<Vec<_>>();
-    let mut samples = crate::dictation::resample_for_parakeet(&mono, spec.sample_rate);
-    crate::dictation::pad_for_parakeet(&mut samples);
-    LinuxTranscriber::load_default()?.transcribe(&samples)
+    Ok(crate::dictation::resample_for_parakeet(
+        &mono,
+        spec.sample_rate,
+    ))
 }
 
 impl LinuxTranscriber {

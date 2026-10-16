@@ -62,7 +62,9 @@ path and contents: `%APPDATA%\voice-control\windows-settings.json`.
 ```
 
 The file also records the `transcription` model and language; missing fields keep
-their defaults.
+their defaults. An opt-in `cloud_transcription` object sends dictation to OpenAI,
+xAI, or Groq instead of the local model; see
+[cloud transcription](cloud-transcription.md).
 
 `key` accepts `space`, `enter`, `tab`, `backspace`, `insert`, `pause`,
 `scrolllock`, `capslock`, a letter or digit, or `f1`-`f24`. Modifiers must match

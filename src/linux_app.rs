@@ -524,7 +524,11 @@ impl LinuxDesktopHost {
             return;
         }
         let model = crate::transcription_models::definition(self.settings.transcription.model);
-        if !crate::transcription_models::is_installed(model, &self.settings.transcription.language)
+        if !self.settings.cloud_transcription.enabled
+            && !crate::transcription_models::is_installed(
+                model,
+                &self.settings.transcription.language,
+            )
         {
             self.status = "Model required".into();
             return;

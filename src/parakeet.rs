@@ -13,6 +13,7 @@ use transcribe_cpp::{
     WhisperRunOptions, sys::TRANSCRIBE_EXT_KIND_WHISPER_RUN,
 };
 
+use crate::cloud_transcription::{CloudTranscriber, CloudTranscriptionSettings};
 use crate::context::ContextSnapshot;
 use crate::dictation::{CaptureSegment, DictationClip, DictationProtocol, pad_for_parakeet};
 use crate::dictation_processor::ProcessingObservation;
@@ -1081,6 +1082,7 @@ fn run_inference_worker(
             WarmTranscriber::default()
         }
     };
+    let mut cloud: Option<CloudTranscriber> = None;
     let mut speculative = SpeculativeTranscript::default();
     while let Ok(command) = commands.recv() {
         let _busy = DictationInference::begin();
@@ -1092,6 +1094,10 @@ fn run_inference_worker(
                 continue;
             }
             InferenceCommand::Segment(piece) => {
+                // Cloud jobs upload the whole clip once instead of every piece.
+                if crate::app_settings::cloud_transcription().enabled {
+                    continue;
+                }
                 // Pieces never load a model; a switch makes the final job fall back.
                 let (_, selection) = crate::app_settings::transcription_selection();
                 let active = transcriber.active_for(&selection);
@@ -1114,8 +1120,20 @@ fn run_inference_worker(
             job_id: job.job_id,
             stage: DictationJobStage::Transcribing,
         });
-        let transcriber = match transcriber.activate(&job.selection) {
-            Ok(transcriber) => transcriber,
+        // The local API keeps its explicit model; dictation targets may use the
+        // opt-in cloud provider instead.
+        let cloud_settings = crate::app_settings::cloud_transcription();
+        let use_cloud =
+            cloud_settings.enabled && !matches!(job.target, TranscriptionTarget::Service);
+        let backend = if use_cloud {
+            activate_cloud(&mut cloud, &cloud_settings).map(DictationBackend::Cloud)
+        } else {
+            transcriber
+                .activate(&job.selection)
+                .map(DictationBackend::Local)
+        };
+        let backend = match backend {
+            Ok(backend) => backend,
             Err(error) => {
                 let _ = output.send(OutputJob::Completed {
                     job_id: job.job_id,
@@ -1131,6 +1149,11 @@ fn run_inference_worker(
         let audio_ms = job.clip.duration_ms();
         let prepare_started = Instant::now();
         let plan = speculative.take_plan(&job.clip, &job.selection, job.protocol.is_some());
+        let plan = if use_cloud {
+            IncrementalPlan::Unsegmented
+        } else {
+            plan
+        };
         let clip_samples = job.clip.into_transcription_samples();
         crate::dictation_diagnostics::persist(&clip_samples);
         let prepare_ms = prepare_started.elapsed().as_millis();
@@ -1139,9 +1162,12 @@ fn run_inference_worker(
             clip_samples,
             plan,
             job.protocol.as_deref(),
-            |samples, protocol| match protocol {
-                Some(protocol) => transcriber.transcribe_voice(samples, protocol),
-                None => transcriber.transcribe(samples),
+            |samples, protocol| match (backend, protocol) {
+                (DictationBackend::Cloud(cloud), _) => cloud.transcribe(&samples),
+                (DictationBackend::Local(transcriber), Some(protocol)) => {
+                    transcriber.transcribe_voice(samples, protocol)
+                }
+                (DictationBackend::Local(transcriber), None) => transcriber.transcribe(samples),
             },
         )
         .map(|text| {
@@ -1215,6 +1241,27 @@ fn run_inference_worker(
             }
         }
     }
+}
+
+enum DictationBackend<'a> {
+    Local(&'a mut crate::transcription::Transcriber),
+    Cloud(&'a CloudTranscriber),
+}
+
+/// Reuses the cloud client until its settings change.
+fn activate_cloud<'a>(
+    cloud: &'a mut Option<CloudTranscriber>,
+    settings: &CloudTranscriptionSettings,
+) -> Result<&'a CloudTranscriber> {
+    if !cloud.as_ref().is_some_and(|cloud| cloud.matches(settings)) {
+        let transcriber = CloudTranscriber::new(settings)?;
+        tracing::info!(
+            provider = transcriber.describe(),
+            "using cloud transcription"
+        );
+        *cloud = Some(transcriber);
+    }
+    Ok(cloud.as_ref().expect("activated cloud transcriber"))
 }
 
 fn join_worker(worker: Option<thread::JoinHandle<()>>, name: &str) {

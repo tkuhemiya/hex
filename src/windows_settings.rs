@@ -13,6 +13,8 @@ pub struct WindowsSettings {
     pub double_tap_lock: bool,
     pub sound_effect_volume: f32,
     pub transcription: crate::transcription_models::TranscriptionSelection,
+    /// Opt-in hosted transcription; off by default.
+    pub cloud_transcription: crate::cloud_transcription::CloudTranscriptionSettings,
 }
 
 /// A key-containing chord. The hook requires exactly these modifiers, so
@@ -35,6 +37,7 @@ impl Default for WindowsSettings {
             double_tap_lock: true,
             sound_effect_volume: 0.5,
             transcription: crate::transcription_models::TranscriptionSelection::default(),
+            cloud_transcription: Default::default(),
         }
     }
 }
@@ -70,6 +73,7 @@ impl WindowsSettings {
     fn validate(&self) -> Result<()> {
         self.dictation_hotkey.virtual_key()?;
         crate::transcription_models::validate(&self.transcription)?;
+        self.cloud_transcription.validate()?;
         if !(0.0..=1.0).contains(&self.sound_effect_volume) {
             return Err(eyre!("Sound volume must be between zero and one"));
         }

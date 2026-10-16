@@ -22,6 +22,8 @@ pub struct LinuxSettings {
     pub paste_with_shift: bool,
     pub sound_effect_volume: f32,
     pub transcription: crate::transcription_models::TranscriptionSelection,
+    /// Opt-in hosted transcription; off by default.
+    pub cloud_transcription: crate::cloud_transcription::CloudTranscriptionSettings,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -43,6 +45,7 @@ impl Default for LinuxSettings {
             paste_with_shift: false,
             sound_effect_volume: 0.5,
             transcription: crate::transcription_models::TranscriptionSelection::default(),
+            cloud_transcription: Default::default(),
         }
     }
 }
@@ -79,6 +82,7 @@ impl LinuxSettings {
     fn validate(&self) -> Result<()> {
         self.dictation_hotkey.validate()?;
         crate::transcription_models::validate(&self.transcription)?;
+        self.cloud_transcription.validate()?;
         if !(0.0..=1.0).contains(&self.sound_effect_volume) {
             return Err(eyre!("Sound volume must be between zero and one"));
         }

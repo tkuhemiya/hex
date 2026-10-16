@@ -149,6 +149,32 @@ awake. [Voice Commands](commands.md#spoken-dictation-controls) owns
 `dictate.voice-controls`, its start/stop/Send/cancel phrases, config, and checks;
 this page owns the resulting capture and output.
 
+### Cloud Transcription (Opt-in)
+
+`cloud_transcription.enabled` (default off) sends each finished dictation clip to
+a hosted speech-to-text API instead of the local model. Setup and keys live in
+[cloud-transcription.md](../cloud-transcription.md); there is no Settings UI yet.
+
+```ts
+Release with cloud enabled                 // dictate.cloud
+├── macOS Paste / Send / Voice Action -> whole clip, no incremental pieces
+│   └── local API (Service target), meetings -> stay on the local model
+├── Linux service, `hex dictate`, Windows `dictate` -> whole clip
+├── 16 kHz mono PCM16 WAV -> multipart POST -> JSON `text`
+│   ├── OpenAI   -> /v1/audio/transcriptions (gpt-4o-mini-transcribe)
+│   ├── xAI      -> /v1/stt (provider default model)
+│   └── Groq     -> /openai/v1/audio/transcriptions (whisper-large-v3-turbo)
+├── Clip > 10 min -> sequential uploads, joined with spaces
+└── HTTP error, timeout, missing key -> job fails, nothing pastes
+```
+
+Key: `cloud_transcription.api_key`, else `OPENAI_API_KEY` / `XAI_API_KEY` /
+`GROQ_API_KEY` in the transcribing process's environment. Endpoints require
+HTTPS except loopback gateways. Linux skips the installed-model gate when cloud
+is enabled; macOS onboarding still requires a local model. Checks:
+`cloud_transcription::tests` (settings, WAV, multipart order, error parsing,
+loopback round trip). No request against a real provider has been recorded.
+
 ### Ongoing Jobs And Output
 
 ```ts
@@ -503,6 +529,9 @@ TextEdit process were stopped afterward.
 - **Paste consumption:** current paste policy waits a fixed interval rather than
   acknowledging target consumption. Internal ordering does not establish
   correctness for an arbitrarily slow target application.
+- **Cloud transcription:** requests are not cancellable mid-upload, so Escape
+  after commit to the worker still waits for the HTTP response (bounded by
+  `timeout_seconds`) before discarding it. Provider calls are unverified here.
 - **Native checks require deliberate setup:** permissions, model, keyboard,
   microphone, output device, and a disposable text target must be recorded. This
   map does not authorize operating the installed app or injecting global input.

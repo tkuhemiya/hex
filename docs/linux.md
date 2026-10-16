@@ -160,6 +160,14 @@ clipboard formats are not restored. A short settling delay prevents immediate
 back-to-back replacement, but is not an acknowledgment from a stalled target
 application (see [#24](https://github.com/anomalyco/hex/issues/24)).
 
+### Cloud Transcription
+
+To send dictation to OpenAI, xAI, or Groq instead of the local model, add a
+`cloud_transcription` object to `linux-settings.json` and restart the service.
+Check a key first with `hex model cloud-transcribe sample.wav`. See
+[cloud transcription](cloud-transcription.md); the service does not inherit
+shell-exported API keys.
+
 ## Native Wayland Requirements
 
 - Export the compositor's nonempty `WAYLAND_DISPLAY` in the launch environment.
