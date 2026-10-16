@@ -948,7 +948,7 @@ pub(crate) fn write_json_atomically(path: &Path, value: &impl Serialize) -> Resu
 pub(crate) fn sha256_hex(path: &Path, canceled: Option<&AtomicBool>) -> Result<String> {
     let mut file = File::open(path)?;
     let mut digest = Sha256::new();
-    let mut buffer = [0_u8; 1024 * 1024];
+    let mut buffer = vec![0_u8; 1024 * 1024];
     loop {
         if let Some(canceled) = canceled {
             check_canceled(canceled)?;
